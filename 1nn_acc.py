@@ -54,6 +54,7 @@ def distance(X, Y, sqrt):
     Y2 = (Y*Y).sum(1).resize_(nY,1)
 
     M = torch.zeros(nX, nY)
+    print('x:',X.type(),'y:',Y.type(),'M:',M.type())
     M.copy_(X2.expand(nX, nY) + Y2.expand(nY, nX).transpose(0, 1) -
             2 * torch.mm(X, Y.transpose(0, 1)))
 
@@ -70,26 +71,27 @@ def compute_score(real, fake):
 #     if isinstance(fake, torch.Tensor) == False:
 #         fake = torch.from_numpy(fake)
     
-    Mxx = distance(real, real, False)
-    Mxy = distance(real, fake, False)
-    Myy = distance(fake, fake, False)
+    Mxx = distance(real, real, True)
+    Mxy = distance(real, fake, True)
+    Myy = distance(fake, fake, True)
     
     s = knn(Mxx, Mxy, Myy, 1)
-
-    return 2*s.acc_real-1,2*s.acc_fake-1
+    return s.acc_real,s.acc_fake
 
 def nn1_acc(real, fake):
     '''
-    生成数据要比原始数据多，acc_real、acc_fake越接近0说明两者分布越接近，
-    acc_real负数，acc_fake正数说明model collapse
-    acc_real正数，acc_fake正数说明生成效果不好，
+    生成数据要比原始数据多，acc_real、acc_fake越接近0.5说明两者分布越接近，
+    acc_real偏小，acc_fake偏大说明model collapse
+    acc_real,acc_fake都偏大说明生成效果不好，
+    acc_real,acc_fake都偏小说明过拟合
     
     '''
     if isinstance(real, torch.Tensor) == False:
         real = torch.from_numpy(real)
     if isinstance(fake, torch.Tensor) == False:
         fake = torch.from_numpy(fake)
-    
+    real = real.type(torch.FloatTensor)
+    fake = fake.type(torch.FloatTensor)
     acc_real = 0
     acc_fake = 0
     
@@ -100,29 +102,28 @@ def nn1_acc(real, fake):
         print("生成的样本不能比真实样本少")
         return
 
-    np.random.shuffle(fake)
+    
+    fake=fake[torch.randperm(fake.size(0))]
     for i in range(nf//nr-1):
         s1, s2 = compute_score(real, fake[nr*i:nr*(i+1),:])
+        print( s1, s2)
         acc_real = acc_real + s1
         acc_fake = acc_fake + s2
-
+        
     index = np.arange(0, nf)
     np.random.shuffle(index)
     index = index[:nr]
     s1, s2 = compute_score(real, fake[index, :])
     acc_real = acc_real + s1
     acc_fake = acc_fake + s2
-    acc_real = acc_real / (1+nf//nr)
-    acc_fake = acc_fake / (1+nf//nr)
-
+    divide = nf//nr
+    acc_real = acc_real / (divide)
+    acc_fake = acc_fake / (divide)
     return acc_real, acc_fake
 
-
-r = np.load('C:/Users/25100/Stars/M-GAN/m5.npy')#
-g = np.load('C:/Users/25100/Stars/M-GAN/m595.npy')
-
-print(r.shape, g.shape)
-print(nn1_acc(r, g), nn1_acc(g[:750], g[750:]), nn1_acc(r[:64], r[64:]))
-
-# (128, 3520) (1500, 3520)
-# (tensor(0.3750), tensor(0.7148)) (tensor(0.2187), tensor(0.2453)) (tensor(0.2188), tensor(0.2656))
+#把real、fake数据传到nn1_acc函数里，返回两个值就可以了
+#示例
+# real = np.load(r'O:\光谱数据\光谱数据\GAN_mn\m6_5_10（原85）.npy')
+# fake = np.load(r'O:\光谱数据\光谱数据\GAN_mn\m6_5_10（生成85）.npy')
+# acc_real,acc_fake = nn1_acc(real, fake)
+# print(acc_real,acc_fake)
